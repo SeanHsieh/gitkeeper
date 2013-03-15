@@ -1,0 +1,7 @@
+#!/bin/bash
+
+#echo "$0" "$1" "$2" "$3" >&2
+#echo "invoke update script" >&2
+
+$GK_BASE/hooks/update.py "$1" "$2" "$3"
+exit $?

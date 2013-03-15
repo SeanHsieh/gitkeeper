@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+
+import os
+import re
+import sys
+import gk
+from gk import rc
+from gk import common
+from gk import helper
+
+"""for usage
+Usage: gitkeeper writable <reponame>|@all on|off [message]
+
+Disable/re-enable pushes to all repos or named repo.  Useful to run
+non-git-aware backups and so on.
+
+'on' enables, 'off' disables, writes (pushes) to the named repo or all repos.
+
+With 'off', any subsequent text is taken to be the message to be shown to
+users when their pushes get rejected.  If it is not supplied, it will take it
+from STDIN; this allows longer messages.
+EOF"""
+
+if len(sys.argv) < 3 or sys.argv[1] == "-h":
+    common.usage()
+
+if not sys.argv[2] in ["on", "off"]:
+    common.usage()
+
+repo = sys.argv[1]
+on = sys.argv[2] == "on"
+
+if repo == "@all":
+    if not helper.is_admin():
+        gk.bye("You are not authorized")
+else:
+    if not helper.owns(repo):
+        gk.bye("You are not authorized")
+
+msg = ""
+
+if len(sys.argv) > 3:
+    msg = sys.argv[3]
+elif not on:
+    # try from stdin
+    for line in sys.stdin.xreadlines():
+        if msg == "":
+            msg += line
+        else:
+            msg += "\n" + line
+
+fn = ".gitkeeper.down"
+
+def target(repodir):
+    if on:
+        common.unlink(repodir + "/" + fn)
+    else:
+        common.put(repodir + "/" + fn, msg)
+
+if repo == "@all":
+    target(rc.rc["HOME"])
+else:
+    target(rc.rc["GK_REPO_BASE"] + "/" + repo + ".git")

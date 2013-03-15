@@ -1,0 +1,113 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import logging
+import os
+import re
+import sys
+
+# This is the first invoked gitkeeper application, we have to setup all necessary environment variables here
+gmp = os.path.dirname(os.path.abspath(__file__))
+sys.path = [gmp] + sys.path
+
+os.environ["GK_BASE"] = gmp
+# This is for the following invoked applications
+os.environ["PYTHONPATH"] = gmp
+
+import gk
+
+try:
+    os.environ["GK_USER"] = sys.argv[1]
+except IndexError:
+    gk.bye("Argument user not found!")
+
+from gk import rc
+from gk import common
+from gk import store
+from gk import access
+
+soc = os.environ.get("SSH_ORIGINAL_COMMAND", None)
+if soc is None:
+    gk.bye("Missing SSH_ORIGINAL_COMMAND...")
+
+rc.trigger("INPUT")
+
+def check_run_mode():
+    if "G3T_USER" in os.environ:
+        gk.info("file ARGV=%s SSH_ORIGINAL_COMMAND=%s", repr(sys.argv), soc )
+
+        if re.search("git-\w+-pack", soc):
+            print("gitkeeper-shell ", sys.argv, ", SSH_ORIGINAL_COMMAND=", soc, sep = "", file = sys.stderr)
+        return "file"    
+    elif "SSH_CONNECTION" in os.environ:
+        gk.info("SSH_ORIGINAL_COMMAND=%s", soc)
+        return "ssh"
+    else:
+        gk.bye("Where are we?")
+
+_lvl_maps = { "0": logging.DEBUG, "1": logging.INFO, "2": logging.WARNING, "3": logging.ERROR, "4": logging.CRITICAL }
+
+def parse_soc():
+    # SSH_ORIGINAL_COMMAND may be changed after rc.trigger("INPUT")
+    soc = os.environ["SSH_ORIGINAL_COMMAND"]
+    git_commands = "git-upload-pack|git-receive-pack|git-upload-archive"
+    m = re.search(r"^(%s) '/?([^\.]+)(?:\.git)?'\s?([0-9]?)$" % git_commands, soc)
+    if m:
+        cmd, repo, log_level = m.groups()
+        if log_level != "":
+            os.environ["GK_DEBUG_LEVEL"] = _lvl_maps[log_level]
+
+        if re.search(rc.REPONAME_PATT, repo) is None:
+            gk.bye("Invalid repo name: \"%s\"" % repo)
+
+        gk.info("git command %s", soc )
+        return cmd, repo
+
+    # after this we should not return; caller expects us to handle it all here
+    # and exit out
+
+    if re.search(rc.REMOTE_COMMAND_PATT, soc) == None:
+        gk.bye("Suspicious characters loitering about \"%s\"" % soc)
+
+    if soc.split()[0] in rc.rc["COMMANDS"]:
+        gk.info(os.getcwd())
+        gk.info("gitkeeper command: %s", soc)
+        common.system("gitkeeper %s" % soc)
+        sys.exit(0)
+
+    gk.bye("Unknown git/gitkeeper command: \"%s\"" % soc)
+
+def main(run_mode):
+    cmd, repo = parse_soc()
+    rc.sanity_repo(repo)
+    os.environ["GK_REPO"] = repo
+
+    user = rc.rc["GK_USER"]
+    mode = "R" if cmd.find("upload") != -1 else "W"
+
+    # auto-create?
+    if rc.repo_missing(repo) and access.permit(repo, user, "^C", "any")[0]:
+        store.new_user_repo(repo, user, mode)
+        gk.info("create %s %s %s", repo, user, mode)
+
+    # a ref of "any" signifies that this is a pre-git check, where we don't
+    # yet know the ref that will be eventually pushed (and even that won't
+    # apply if it's a read operation). See the matching code in access.permit()
+    # for more information.
+    if "GK_BYPASS_ACCESS_CHECKS" not in os.environ:
+        d = {True: "True", False: "False"}
+        ret, msg = access.permit(repo, user, mode, "any")
+        gk.info("access.permit(%s, %s, %s, \"\") -> %s", repo, user, mode, d[ret])
+        rc.trigger("ACCESS_1", repo, user, mode, "any", ret)
+        if ret is False:
+            gk.bye("(or you mis-spelled the reponame)")
+
+        gk.info("pre_git '%s' '%s' '%s' 'any' -> %s", repo, user, mode, d[ret])
+
+    rc.trigger("PRE_GIT", repo, user, mode, "any", cmd)
+    repodir = rc.rc["GK_REPO_BASE"] + "/" + repo + ".git"
+    common.system("%s '%s'" % (cmd, repodir))
+    #common.system("git shell -c %s '%s'" % (cmd, repodir))
+    rc.trigger("POST_GIT", repo, user, mode, "any", cmd)
+
+main(check_run_mode())

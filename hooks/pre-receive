@@ -1,0 +1,39 @@
+#!/bin/bash
+
+$GK_HOOK_PATH/pre-receive.py
+exit $?
+
+export REPO_TOP=/scm/tools/
+
+echo "GK_USER_FULLNAME $GK_USER_FULLNAME"
+
+echo > $REPO_TOP/pre-receive
+while read oldrev newrev refname
+do
+    echo "$oldrev $newrev $refname" >> $REPO_TOP/pre-receive
+    echo "oldrev:" >> $REPO_TOP/pre-receive
+    git cat-file -p $oldrev >> $REPO_TOP/pre-receive
+    #echo $oldrev | git cat-file --batch >> $REPO_TOP/pre-receive
+    echo "-----------------------" >> $REPO_TOP/pre-receive
+    echo >> $REPO_TOP/pre-receive
+
+    echo "newrev:" >> $REPO_TOP/pre-receive
+    git cat-file -p $newrev >> $REPO_TOP/pre-receive
+    #echo $oldrev | git cat-file --batch >> $REPO_TOP/pre-receive
+    echo "-----------------------" >> $REPO_TOP/pre-receive
+    echo >> $REPO_TOP/pre-receive
+
+    echo `git diff-tree -r $oldrev..$newrev` >> $REPO_TOP/pre-receive
+    echo "-----------------------" >> $REPO_TOP/pre-receive
+    echo >> $REPO_TOP/pre-receive
+
+    for path in `git diff-tree -r $oldrev..$newrev | awk '{print $6}'`
+    do
+        echo "git update-ref refs/blametree/$refname/$path $newrev" >> $REPO_TOP/pre-receive
+        `git update-ref refs/blametree/$refname/$path $newrev` >> $REPO_TOP/pre-receive
+        echo "-----------------------" >> $REPO_TOP/pre-receive
+    done
+
+done
+
+exit 1

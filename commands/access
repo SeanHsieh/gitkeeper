@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+
+import re
+import sys
+import gk
+from gk import rc
+from gk import common
+from gk import access
+
+"""for usage
+Usage:  gitkeeper access [-q] <repo> <user> <perm> <ref>
+
+Print access rights for arguments given.  The string printed has the word
+DENIED in it if access was denied.  With '-q', returns only an exit code
+(shell truth, not perl truth -- 0 is success).
+
+  - repo: mandatory
+  - user: mandatory
+  - perm: defauts to '+'.  Valid values: R, W, +, C, D, M and ^C
+  - ref:  defauts to 'any'.  See notes below
+
+Notes:
+  - ref: Any fully qualified ref ('refs/heads/master', not 'master') is fine.
+    The 'any' ref is special -- it ignores deny rules (see docs for what this
+    means and exceptions).
+
+Batch mode: see src/triggers/post-compile/update-git-daemon-access-list for a
+good example that shows how to test several repos in one invocation.  This is
+orders of magnitude faster than running the command multiple times; you'll
+notice if you have more than a hundred or so repos.
+EOF"""
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3 or sys.argv[1] == "-h":
+        common.usage()
+
+    quiet = True if sys.argv[1] == "-q" else False
+    sys.argv.pop(0)
+    # if no perm and ref, we can get None for them
+    n = 4 - len(sys.argv)
+    while n > 0:
+        sys.argv.append(None)
+        n -= 1
+
+    repo, user, perm, ref = sys.argv
+    if not perm:
+        perm = '+'
+    if not ref:
+        ref = 'any'
+
+    if not (perm and re.match(r"R|W|\+|C|D|M|\^C", perm)):
+        gk.bye("Invalid perm!")
+
+    if not (ref and re.match(rc.REPONAME_PATT, ref)):
+        gk.bye("Invalid ref name!")
+
+    msg = ''
+
+    if repo != '%' and user != '%':
+        # single repo, single user; no STDIN
+        ret, msg = access.permit(repo, user, perm, ref)
+
+        if not quiet:
+            print '"%s"' % "any" if msg == "" else msg
+
+        sys.exit(0 if ret else 1)
+
+    if repo == "%s":
+        repo = ''
+
+    if user == "%s":
+        user = ''
+
+    if quiet:
+        gk.bye("'-q' doesn't go with using a pipe")
+
+    for line in sys.stdin.xreadlines():
+        r, u = line.strip().split(' ')
+        ret, msg = access.permit(r, u, perm, ref)
+        print "%s\t%s\t%s" % (r, u, ret)

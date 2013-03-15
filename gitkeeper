@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import os
+import re
+import string
+import sys
+
+if os.environ.get("GK_BASE", None) == None:
+    # It may be the first invoked gitkeeper application, we have to setup all necessary environment variables here
+    gmp = os.path.dirname(os.path.abspath(__file__))
+    sys.path = [gmp] + sys.path
+
+    os.environ["GK_BASE"] = gmp
+    # This is for the following invoked applications
+    os.environ["PYTHONPATH"] = gmp
+
+import gk
+from gk import rc
+from gk import common
+
+# all gitkeeper CLI tools run as sub-commands of this command
+# ----------------------------------------------------------------------
+
+"""for usage
+Usage:  gitkeeper [sub-command] [options]
+
+The following built-in subcommands are available; they should all respond to
+'-h' if you want further details on each:
+
+    setup                       1st run: initial setup; all runs: hook fixups
+    compile                     compile gitkeeper.conf
+
+    query-rc                    get values of rc variables
+
+    list-groups                 list all group names in conf
+    list-users                  list all users/user groups in conf
+    list-repos                  list all repos/repo groups in conf
+    list-phy-repos              list all repos actually on disk
+    list-memberships            list all groups a name is a member of
+    list-members                list all members of a group
+
+Warnings:
+  - list-users is disk bound and could take a while on sites with 1000s of repos
+  - list-memberships does not check if the name is known; unknown names come
+    back with 2 answers: the name itself and '@all'
+
+In addition, running 'gitkeeper help' should give you a list of custom commands
+available.  They may or may not respond to '-h', depending on how they were
+written.
+EOF"""
+
+# ----------------------------------------------------------------------
+
+def usage():
+    if len(sys.argv) == 1 or sys.argv[1] == '-h':
+        common.usage()
+
+gk.info("cli gitkeeper %s", repr(sys.argv))
+usage()
+
+sys.argv.pop(0)
+command = sys.argv[0]
+
+# find any argument split with white space then we quote them
+for s in sys.argv:
+    if s.find(" ") != -1:
+        sys.argv[sys.argv.index(s)] = "\"" + s + "\""
+
+if command == "query-rc":
+    rc.query_rc()       # doesn't return
+
+elif command == "trigger":
+    argv = tuple(sys.argv[1:])
+    rc.trigger(*argv)
+
+elif command == "setup":
+    from gk import setup
+    setup.setup()
+
+elif command == "compile":
+    from gk.conf import parser
+    parser.compile(True if len(sys.argv) == 2 and sys.argv[1] == '-p' else False)
+
+elif common.which("commands/%s" % command, 'x'):
+    c = common.which("commands/%s" % command, 'x')
+    sys.argv[0] = c
+    gk.info("Attempting gitkeeper command %s", command)
+    s = string.joinfields(sys.argv, " ")
+    common.system(s)
+    sys.exit(0)
+
+else:
+    gk.bye("Unknown gitkeeper sub-command")
