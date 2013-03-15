@@ -99,25 +99,3 @@ def critical(msg, *args, **kwargs):
 
 def exception(msg, *args):
     log(logging.ERROR, msg, exec_info = 1, *args)
-
-"""
-def repoBase(path):
-    pwd = None
-
-    if path is not None:
-        _pwd = os.getcwd()
-        slices = (path + ".git").split("/")
-
-        for p in slices:
-            if p == "":
-                p = "/"
-            os.chdir(p)
-
-            if os.path.exists("gk.conf"):
-                pwd = os.getcwd()
-                break
-
-        os.chdir(_pwd)
-
-    return pwd
-"""
