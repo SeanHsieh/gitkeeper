@@ -1,9 +1,9 @@
 from __future__ import print_function
-import ConfigParser
 import errno
 import os
 import os.path
 import re
+import string
 import subprocess
 import sys
 import time
@@ -141,6 +141,20 @@ def invokeVREFMaker(vref, ref, oldsha, newsha, oldtree, newtree, mode):
 
     return result, returncode
 
+# Checking a repository name is matching the repository name regular expression or not
+#
+# parameters
+#   * repoex        list(string)
+#   * repo          string
+#
+# return            boolean
+def match_repo(repoex, repo):
+    for ex in repoex:
+        mm = re.match(ex, repo)
+        if mm and mm.group(0) == repo:
+            return True
+    return False
+
 def permit(repo, user, mode, ref = "any"):
     global repoconf
 
@@ -174,7 +188,9 @@ def permit(repo, user, mode, ref = "any"):
     mp = mode.replace("+", "\+").replace("M", ".*M")
     
     for repo_rules in repoconf.repoRulesList:
-        #repoconf.currentRepo = repo_rules
+        if not match_repo(repo_rules.repoex, repo):
+            continue
+
         gk.debug("")
         gk.debug("[repo: %s]", repr(repo_rules.repoex))
         not_found = False
@@ -186,7 +202,9 @@ def permit(repo, user, mode, ref = "any"):
             if deny_rules is False and rule.perms == "-" and ref == "any":
                 continue
 
-            if not(user in rule.members or "@all" in rule.members):
+            members = conf.replace_group(string.join(rule.members), repoconf.role_perms)
+
+            if not(user in members or "@all" in members):
                 continue
 
             gk.debug("  [rule: %s %s: %s]", rule.perms, refex, repr(rule.members))

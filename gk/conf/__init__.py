@@ -1,6 +1,8 @@
 from __future__ import print_function
 import os
 import pickle
+import re
+import string
 import gk
 from gk import rc
 
@@ -10,6 +12,7 @@ __all__ = [
     "Rule",
     "RepoRules",
     "RepoConf",
+    "replace_group",
     "load_conf"
     ]
 
@@ -60,6 +63,7 @@ class RepoRules:
         self.rules = []
         self.options = {}
         self.defaultAccess = False
+        self.role_perms = {}
 
     def print(self):
         print("repoex: %s" % repr(self.repoex))
@@ -86,6 +90,43 @@ class RepoConf:
             print("")
             repo_rules.print()
 
+# Recursively replace a group name to a corresponding member name string list,
+# and return the members string as a string list object
+#
+# parameters
+#   * members   string
+#       The members string to be replaced.
+#
+#   * groups    dict(string, string)
+#       The dictionary is for group mapping to members list
+#
+# retrun        list(string)
+def replace_group(members, groups):
+
+    def replace_member(members, groups):
+        if groups is None:
+            return members
+
+        for i, j in groups.iteritems():
+            if i in members:
+                members = re.sub(r"%s\b" % i, replace_member(j, groups), members)
+        return members
+
+    # convert to a set to remove those redundant members
+    return list(set(replace_member(members, groups).split()))
+
+def get_role_perms(repo):
+    fn = rc.rc["GK_REPO_BASE"] + "/" + repo + ".git/gk-perms"
+    perms = {}
+    if os.access(fn, os.F_OK):
+        try:
+            with open(fn, "rb") as f:
+                perms = pickle.load(f)
+        except BaseException as e:
+            pass
+
+    return perms
+
 _repoconf = None
 
 def load_conf(repo):
@@ -102,10 +143,14 @@ def load_conf(repo):
                 _repoconf = pickle.load(f)
         except BaseException as e:
             gk.bye("* pickle.load('%s') failed: %s" % (fn, repr(e)))
+        else:
+            for rr in _repoconf.repoRulesList:
+                rr.repoex = string.join(rr.repoex).replace("CREATOR", rc.rc["GK_USER"]).split()
 
+    # load a real repo rules
     if not rc.repo_missing(repo) and _repoconf.lastRepo != repo:
         if _repoconf.lastRepo:
-            _repoconf.repoRulesList.remove(_repoconf.lastRepo)
+            del _repoconf.repoRulesList[0]
         
         _repoconf.lastRepo = repo
         fn = rc.rc["GK_REPO_BASE"] + "/" + repo + ".git/gk-conf"
@@ -117,5 +162,19 @@ def load_conf(repo):
                 gk.bye("* pickle.load('%s') failed: %s" % (fn, repr(e)))
             else:
                 _repoconf.repoRulesList.insert(0, repo_rules)
+
+        fn = rc.rc["GK_REPO_BASE"] + "/" + repo + ".git/gk-perms"
+        if os.access(fn, os.F_OK):
+            try:
+                with open(fn, "rb") as f:
+                    perms = pickle.load(f)
+            except BaseException as e:
+                gk.bye("* pickle.load('%s') failed: %s" % (fn, repr(e)))
+            else:
+                for rr in _repoconf.repoRulesList:
+                    for r in rr.rules:
+                        r.members = replace_group(string.join(r.members), perms)
+
+        _repoconf.role_perms = get_role_perms(repo)
 
     return _repoconf

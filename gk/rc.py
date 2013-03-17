@@ -31,6 +31,7 @@ __all__ = [
 
 REMOTE_COMMAND_PATT  =          r"^[-0-9a-zA-Z._@/+ :,%=\'\"]*$"
 REF_OR_FILENAME_PATT =          r"^[0-9a-zA-Z][-0-9a-zA-Z._@/+ :,]*$"
+REFPATT_PATT         = r"^\^?\??[[0-9a-zA-Z][-0-9a-zA-Z._@/+:,\\^$|()[\]*?{},]*$"
 REPONAME_PATT        =        r"^@?[0-9a-zA-Z][-0-9a-zA-Z._@/+]*$"
 REPOPATT_PATT        = r"^\^?@?\??[[0-9a-zA-Z][-0-9a-zA-Z._@/+\\^$|()[\]*?{},]*$"
 USERNAME_PATT        =        r"^@?[0-9a-zA-Z][-0-9a-zA-Z._@+]*$"
@@ -47,7 +48,7 @@ rc["HOME"]          = os.environ["HOME"]
 rc["GK_BASE"]       = os.environ.get("GK_BASE", None)
 
 rc["GK_USER_NAME"]  = os.environ.get("GK_USER_FULLNAME", None)
-rc["GK_USER"]       = os.environ.get("GK_USER", None)
+rc["GK_USER"]       = os.environ.get("GK_USER", None) if os.environ.get("GK_USER", None) else os.environ.get("USER", None)
 rc["GK_REPO"]       = os.environ.get("GK_REPO", None)
 
 # These keys could be overridden by the rc file later
@@ -212,7 +213,7 @@ RC = {
             "WRITERS"           :  1,
         },
     # uncomment (and change) this if you wish
-    # "DEFAULT_ROLE_PERMS"      :  "READERS @all",
+    "DEFAULT_ROLE_PERMS"        :  { "READERS": @all" },
 
     # comment out or uncomment as needed
     # these are available to remote users

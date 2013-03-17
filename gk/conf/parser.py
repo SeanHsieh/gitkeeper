@@ -16,31 +16,6 @@ __all__ = [
     "compile",
     ]
 
-# Recursively replace a group name to a corresponding member name string list,
-# and return the members string as a string list object
-#
-# parameters
-#   * members   string
-#       The members string to be replaced.
-#
-#   * groups    dict(string, string)
-#       The dictionary is for group mapping to members list
-#
-# retrun        list(string)
-def replace_group(members, groups):
-
-    def replace_member(members, groups):
-        if groups is None:
-            return members
-
-        for i, j in groups.iteritems():
-            if i in members:
-                members = re.sub(r"%s\b" % i, replace_member(j, groups), members)
-        return members
-
-    # convert to a set to remove those redundant members
-    return list(set(replace_member(members, groups).split()))
-
 def compile(verbose = False):
     repoconf = conf.RepoConf()
     config = ConfigParser.SafeConfigParser()
@@ -87,7 +62,7 @@ def compile(verbose = False):
                 if re.search(rc.REPONAME_PATT, patt) == None and re.search(rc.REPOPATT_PATT, patt) == None:
                     gk.bye("* Invalid repo pattern '%s' in [repo: %s]" % (patt, repo_patt))
 
-            repoex = replace_group(repo_patt, projects)
+            repoex = conf.replace_group(repo_patt, projects)
 
             try:
                 rule_options = config.options(sect)
@@ -102,7 +77,7 @@ def compile(verbose = False):
                         continue
 
                     r = conf.Rule()
-                    r.members = replace_group(config.get(sect, ro), groups)
+                    r.members = conf.replace_group(config.get(sect, ro), groups)
 
                     try:
                         perms, refex = ro.split()
@@ -113,7 +88,7 @@ def compile(verbose = False):
                     if  re.search(rc.PERM_PATT, perms) == None:
                         gk.bye("* Invalid perm pattern '%s' in section [%s], option '%s'" % (perms, sect, ro))
 
-                    if refex != "" and re.search(rc.REF_OR_FILENAME_PATT. refex) == None:
+                    if refex != "" and re.search(rc.REF_OR_FILENAME_PATT, refex) == None and re.search(rc.REFPATT_PATT, refex) == None:
                         gk.bye("* Invalid ref pattern '%s' in section [%s], option '%s'" % (refex, sect, ro))
 
                     r.perms = perms.upper()
@@ -127,7 +102,7 @@ def compile(verbose = False):
                     rr.rules.append(r)
 
                 # a real repo rule saves to gk-conf in repo directory
-                if re.search(rc.REPONAME_PATT, repo_patt) and not re.search(r"^@|EXTCMD", repo_patt):
+                if re.search(rc.REPONAME_PATT, repo_patt) and not re.search(r"^@|EXTCMD", repo_patt) and repo_patt.find("CREATOR") == -1:
                     repo_rules.append(rr)
                     if verbose:
                         rr.print()

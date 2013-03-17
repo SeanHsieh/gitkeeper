@@ -1,6 +1,7 @@
 from __future__ import print_function
 import errno
 import os
+import pickle
 import re
 import sys
 import gk
@@ -59,7 +60,9 @@ def new_user_repo(repo, user, mode):
     rc.trigger("PRE_CREATE", repo, user, mode)
     new_repo(repo)
     common.put(repo + ".git/gk-creator", user)
-    common.put(repo + ".git/gk-perms", rc.rc["DEFAULT_ROLE_PERMS"] if "DEFAULT_ROLE_PERMS" in rc.rc else "")
+    #common.put(repo + ".git/gk-perms", rc.rc["DEFAULT_ROLE_PERMS"] if "DEFAULT_ROLE_PERMS" in rc.rc else "")
+    with open(repo + ".git/gk-perms", "wb") as f:
+        pickle.dump(rc.rc["DEFAULT_ROLE_PERMS"] if "DEFAULT_ROLE_PERMS" in rc.rc else {}, f)
     rc.trigger("POST_CREATE", repo, user, mode)
 
     common.chdir(rc.rc["GK_ADMIN_BASE"])
